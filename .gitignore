@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# OS and editor
+.DS_Store
+.vscode/
+.idea/
+
+# Documents, paper and local notes
+research_docs/
+*.docx
+*.pdf
+*.PDF
+install.ipynb
+
+# Local tools
+.claude/
+.superpowers/
+graphify-out/
+skeleton_check/
+
+# Generated outputs
+outputs/
+*.png
+
+# Model weights
+yolo11*.pt
+*.pth
+
+# Data: raw bytes stay local, labels and provenance are tracked
+datasets/sav/videos/
+datasets/sav/videos_source/*
+!datasets/sav/videos_source/download_manifest.csv
+datasets/sav/videos_clipped/
+datasets/sav/pose_tracks/
+datasets/sav/windows/
+datasets/sav/windows_filtered/
+datasets/sav/annotations/
+datasets/sav/*.zip
+datasets/ntu/*.pkl
+datasets/ntu/*.log
+datasets/ntu/.download.log
+datasets/video_fps.json

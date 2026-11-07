@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SAV Window Review</title>
+<style>
+/* Layout: filter bar on top; window list on the left; looping clip with skeleton, facts and label keys on the right. */
+:root{
+  --bg:#eef1f4; --surface:#ffffff; --ink:#17202b; --muted:#5b6777; --line:#d2d9e1;
+  --accent:#2357c9; --accent-soft:#e1e9fa; --on-accent:#ffffff;
+  --focused:#1b7a47; --focused-soft:#dcf0e4; --distracted:#b9472c; --distracted-soft:#f8e2db;
+  --trash:#6b6f78; --trash-soft:#e6e7ea; --unl:#946411; --unl-soft:#f5ebd3;
+  --body:system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono:ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f141a; --surface:#18202a; --ink:#e4e9f0; --muted:#97a3b3; --line:#2b3542;
+    --accent:#7ea4ff; --accent-soft:#1c2943; --on-accent:#0d1420;
+    --focused:#5fc68c; --focused-soft:#15301f; --distracted:#f08a6c; --distracted-soft:#3a2119;
+    --trash:#a3a8b2; --trash-soft:#2a2e35; --unl:#e2b55c; --unl-soft:#352a12;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f141a; --surface:#18202a; --ink:#e4e9f0; --muted:#97a3b3; --line:#2b3542;
+  --accent:#7ea4ff; --accent-soft:#1c2943; --on-accent:#0d1420;
+  --focused:#5fc68c; --focused-soft:#15301f; --distracted:#f08a6c; --distracted-soft:#3a2119;
+  --trash:#a3a8b2; --trash-soft:#2a2e35; --unl:#e2b55c; --unl-soft:#352a12;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px;display:grid;grid-template-rows:auto 1fr}
+.mono{font-family:var(--mono)}
+.muted{color:var(--muted)}
+header{background:var(--surface);border-bottom:1px solid var(--line);padding:10px 16px;display:grid;gap:8px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+h1{font-size:1rem;margin:0 12px 0 0}
+select,input[type=text]{font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+input.bad{border-color:var(--distracted);outline:2px solid var(--distracted)}
+button{font:inherit;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer}
+button:hover:not(:disabled){border-color:var(--accent)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+button:disabled{opacity:.4;cursor:default}
+.chip{display:inline-flex;gap:6px;align-items:center}
+.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:600}
+.chip .n{font-family:var(--mono);font-size:.8rem;color:var(--muted)}
+label.tog{display:inline-flex;gap:5px;align-items:center;color:var(--muted)}
+main{display:grid;grid-template-columns:360px 1fr;min-height:0}
+#list{overflow:auto;border-right:1px solid var(--line);background:var(--surface)}
+.item{display:grid;grid-template-columns:1fr auto auto;gap:6px;align-items:center;padding:6px 12px;border-bottom:1px solid var(--line);cursor:pointer}
+.item:hover{background:var(--bg)}
+.item.cur{background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent)}
+.item .id{font-family:var(--mono);font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill{font-size:.72rem;font-weight:600;padding:1px 7px;border-radius:10px;white-space:nowrap}
+.g-Focused{background:var(--focused-soft);color:var(--focused)}
+.g-Distracted{background:var(--distracted-soft);color:var(--distracted)}
+.g-TRASH{background:var(--trash-soft);color:var(--trash)}
+.g-Unlabeled,.g-Skip{background:var(--unl-soft);color:var(--unl)}
+.g-Filtered,.g-Missing,.g-No{background:transparent;color:var(--muted);border:1px solid var(--line)}
+.mine{font-size:.72rem;font-weight:600;font-family:var(--mono);min-width:22px;text-align:center;border-radius:4px;padding:1px 4px}
+.mine.same{color:var(--focused)}
+.mine.diff{background:var(--distracted);color:var(--on-accent)}
+#detail{overflow:auto;padding:16px;display:grid;gap:12px;align-content:start}
+.stage{position:relative;background:#000;border-radius:8px;overflow:hidden;height:min(58vh,calc((100vw - 400px) * 9 / 16));min-height:220px;width:100%}
+.stage video,.stage canvas{position:absolute;inset:0;width:100%;height:100%}
+.stage video{object-fit:contain}
+.stage canvas{pointer-events:none}
+.stage .msg{position:absolute;left:12px;top:10px;color:#fff;background:rgba(0,0,0,.55);padding:3px 8px;border-radius:5px;font-size:.8rem}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:12px 14px;display:grid;gap:8px}
+.facts{display:grid;grid-template-columns:150px 1fr;gap:4px 12px}
+.facts dt{color:var(--muted)}
+.facts dd{margin:0}
+.keys{display:flex;flex-wrap:wrap;gap:8px}
+.keys button{padding:10px 16px;font-weight:600;display:inline-flex;gap:8px;align-items:center}
+.keys kbd{font-family:var(--mono);font-size:.75rem;border:1px solid currentColor;border-radius:4px;padding:0 5px;opacity:.75}
+.keys button.cur-label{outline:2px dashed var(--muted);outline-offset:2px}
+.keys button.my-Focused{background:var(--focused);color:var(--on-accent);border-color:var(--focused)}
+.keys button.my-Distracted{background:var(--distracted);color:var(--on-accent);border-color:var(--distracted)}
+.keys button.my-TRASH{background:var(--trash);color:var(--on-accent);border-color:var(--trash)}
+.keys button.my-Skip{background:var(--unl);color:var(--on-accent);border-color:var(--unl)}
+.note{color:var(--muted);font-size:.85rem;max-width:80ch}
+.now-label{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:1rem;font-weight:600}
+.now-label .pill{font-size:.85rem;padding:3px 10px}
+.now-label small{font-weight:400;color:var(--muted);font-size:.82rem}
+.item .labs{display:inline-flex;gap:4px;align-items:center;white-space:nowrap}
+.item .old{text-decoration:line-through;opacity:.6}
+.toast{position:fixed;right:16px;bottom:16px;background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:6px;opacity:0;transition:opacity .2s}
+.toast.on{opacity:1}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.8rem;color:var(--muted);align-items:center}
+.sw{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:4px;vertical-align:middle}
+@media (max-width:820px){main{grid-template-columns:1fr;grid-template-rows:240px 1fr}#list{border-right:0;border-bottom:1px solid var(--line)}}
+@media (prefers-reduced-motion: reduce){.toast{transition:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="row">
+    <h1>SAV window review</h1>
+    <label for="reviewer" class="muted">Reviewer</label>
+    <input type="text" id="reviewer" placeholder="e.g. panel or annotator_1" size="18" autocomplete="off">
+    <input type="text" id="search" placeholder="Search clip or window id" size="26" autocomplete="off">
+    <label class="tog"><input type="checkbox" id="only-todo"> Not reviewed by me</label>
+    <label class="tog"><input type="checkbox" id="only-diff"> My label differs</label>
+    <label for="order" class="muted">Order</label>
+    <select id="order"><option value="clip">by clip</option><option value="sus">most suspicious first</option></select>
+    <span id="progress" class="muted mono"></span>
+  </div>
+  <div class="row" id="chips" role="group" aria-label="Show these groups"></div>
+</header>
+<main>
+  <div id="list" role="listbox" aria-label="Windows"></div>
+  <div id="detail">
+    <div class="stage">
+      <video id="video" muted playsinline preload="auto"></video>
+      <canvas id="overlay"></canvas>
+      <span class="msg" id="frame-msg">loading</span>
+    </div>
+    <div class="row">
+      <button id="b-play">Pause <span class="muted">(Space)</span></button>
+      <button id="b-prevf" title="Previous frame (,)">◀ frame</button>
+      <button id="b-nextf" title="Next frame (.)">frame ▶</button>
+      <button data-rate="0.5">0.5×</button><button data-rate="1">1×</button><button data-rate="2">2×</button>
+      <label class="tog"><input type="checkbox" id="t-skel" checked> Skeleton (S)</label>
+      <label class="tog"><input type="checkbox" id="t-box" checked> Box (B)</label>
+      <span class="legend"><span><i class="sw" style="background:#3be08a"></i>joints 0–12 (the 13-joint model)</span><span><i class="sw" style="background:#9aa3ad"></i>knees and ankles (13–16)</span></span>
+    </div>
+    <div class="panel">
+      <div class="now-label" id="now-label"></div>
+      <div class="keys" id="keys">
+        <button data-label="Focused">Focused <kbd>1</kbd></button>
+        <button data-label="Distracted">Distracted <kbd>2</kbd></button>
+        <button data-label="TRASH">TRASH <kbd>8</kbd></button>
+        <button data-label="Skip">Skip / unsure <kbd>D</kbd></button>
+        <button id="b-prev">◀ Previous <kbd>←</kbd></button>
+        <button id="b-next">Next <kbd>→</kbd></button>
+      </div>
+      <label class="tog"><input type="checkbox" id="auto-next"> Go to the next item after labeling</label>
+      <p class="note" id="kind-note"></p>
+    </div>
+    <div class="panel">
+      <dl class="facts" id="facts"></dl>
+    </div>
+    <p class="note">Labels you set here are saved to <span class="mono">datasets/sav/review/&lt;reviewer&gt;.csv</span>. <span class="mono">annotations.csv</span> changes only when you run <span class="mono">python steps/review.py apply --reviewer NAME --write</span>. Click any label to switch to it; click the original label to switch back. The dashed outline marks the label in annotations.csv; the filled button is the label you chose.</p>
+  </div>
+</main>
+<div class="toast" id="toast" role="status"></div>
+<script>
+const GROUPS = [
+  ['Focused', 'Focused'], ['Distracted', 'Distracted'], ['TRASH', 'TRASH'], ['Unlabeled', 'Unlabeled'],
+  ['Filtered out', 'Filtered out by quality filter'], ['Missing window', 'Label whose window does not exist'],
+  ['No window', 'Clip with no window']
+];
+const KIND_NOTE = {
+  used: 'Used in training when labeled Focused or Distracted.',
+  unlabeled: 'Passed the quality filter but has no label. A label here is added by apply.',
+  filtered_out: 'Dropped by the quality filter, so never labeled and never used in training. Your label is saved, but apply skips it.',
+  missing: 'This label exists, but no window has this track number, so it is not used in training. Video only: there is no skeleton to show.',
+  no_window: 'Nobody in this clip was tracked long enough to make a window. Video only.'
+};
+const EDGES = [[0,1],[0,2],[1,3],[2,4],[5,6],[5,7],[7,9],[6,8],[8,10],[5,11],[6,12],[11,12],[11,13],[13,15],[12,14],[14,16]];
+const REVIEWER_RE = /^[A-Za-z0-9_-]{1,40}$/;
+
+const S = {items: [], bySus: [], prov: {}, reviews: {}, view: [], cur: -1, win: null, filters: new Set(GROUPS.map(g => g[0]))};
+const $ = id => document.getElementById(id);
+const video = $('video'), canvas = $('overlay'), ctx = canvas.getContext('2d');
+
+function store(k, v) { try { v === undefined ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} }
+function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+
+function groupOf(it) {
+  if (it.kind === 'used') return it.label || 'Unlabeled';
+  return {filtered_out: 'Filtered out', missing: 'Missing window', no_window: 'No window'}[it.kind];
+}
+function pillClass(g) { return 'pill g-' + g.split(' ')[0]; }
+function reviewer() { return $('reviewer').value.trim(); }
+function mine(it) { const r = S.reviews[reviewer()]; return r ? r[it.id] : undefined; }
+function labelable(it) { return it.kind === 'used' || it.kind === 'filtered_out'; }
+function short(l) { return {Focused: 'F', Distracted: 'D', TRASH: 'T', Skip: '?'}[l] || ''; }
+
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('on');
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 2200);
+}
+
+function renderChips() {
+  const counts = {};
+  for (const it of S.items) { const g = groupOf(it); counts[g] = (counts[g] || 0) + 1; }
+  const box = $('chips'); box.replaceChildren();
+  for (const [g, title] of GROUPS) {
+    const b = document.createElement('button');
+    b.className = 'chip'; b.title = title;
+    b.setAttribute('aria-pressed', String(S.filters.has(g)));
+    b.innerHTML = `<span class="${pillClass(g)}">${g}</span><span class="n">${(counts[g] || 0).toLocaleString()}</span>`;
+    b.onclick = () => { S.filters.has(g) ? S.filters.delete(g) : S.filters.add(g); renderChips(); applyFilter(); };
+    box.append(b);
+  }
+  const all = document.createElement('button');
+  all.textContent = 'All'; all.onclick = () => { S.filters = new Set(GROUPS.map(g => g[0])); renderChips(); applyFilter(); };
+  const none = document.createElement('button');
+  none.textContent = 'None'; none.onclick = () => { S.filters.clear(); renderChips(); applyFilter(); };
+  box.append(all, none, Object.assign(document.createElement('span'), {className: 'muted', textContent: `${S.items.length.toLocaleString()} items in total`}));
+}
+
+function applyFilter(keepId) {
+  const q = $('search').value.trim().toLowerCase();
+  const todo = $('only-todo').checked, diff = $('only-diff').checked;
+  const curId = keepId !== undefined ? keepId : (S.view[S.cur] || {}).id;
+  const pool = $('order').value === 'sus' ? S.bySus : S.items;
+  S.view = pool.filter(it => {
+    if (!S.filters.has(groupOf(it))) return false;
+    if (q && !it.id.toLowerCase().includes(q)) return false;
+    const m = mine(it);
+    if (todo && (m !== undefined || !labelable(it))) return false;
+    if (diff && (m === undefined || m === it.label || m === 'Skip')) return false;
+    return true;
+  });
+  renderList();
+  let idx = S.view.findIndex(it => it.id === curId);
+  if (idx < 0) idx = S.view.length ? Math.min(Math.max(S.cur, 0), S.view.length - 1) : -1;
+  select(idx, true);
+}
+
+function changed(it) { const m = mine(it); return m !== undefined && m !== it.label; }
+
+function rowHtml(it) {
+  const g = groupOf(it), m = mine(it);
+  const name = it.track === null ? it.id : `${it.clip} #${it.track}`;
+  const labs = changed(it)
+    ? `<span class="${pillClass(g)} old">${g}</span>→<span class="${pillClass(m)}">${m}</span>`
+    : `<span class="${pillClass(g)}">${g}</span>`;
+  const tick = m !== undefined && !changed(it) ? '<span class="mine same" title="checked, label kept">✓</span>' : '<span class="mine"></span>';
+  return `<span class="id" title="${it.id}">${name}${it.excluded ? ' ⊘' : ''}</span><span class="labs">${labs}</span>${tick}`;
+}
+
+function renderList() {
+  const list = $('list'); list.replaceChildren();
+  const frag = document.createDocumentFragment();
+  S.view.forEach((it, i) => {
+    const d = document.createElement('div');
+    d.className = 'item'; d.dataset.i = i; d.setAttribute('role', 'option');
+    d.innerHTML = rowHtml(it);
+    frag.append(d);
+  });
+  list.append(frag);
+  updateProgress();
+}
+$('list').addEventListener('click', e => { const r = e.target.closest('.item'); if (r) select(+r.dataset.i); });
+
+function updateProgress() {
+  const r = S.reviews[reviewer()] || {};
+  const lab = S.view.filter(labelable);
+  const done = lab.filter(it => r[it.id] !== undefined).length;
+  $('progress').textContent = `${S.view.length.toLocaleString()} shown · reviewed by you: ${done.toLocaleString()} / ${lab.length.toLocaleString()}`;
+}
+
+function refreshRow(i) {
+  const row = $('list').querySelector(`.item[data-i="${i}"]`);
+  if (row) row.innerHTML = rowHtml(S.view[i]);
+}
+
+async function select(i, quiet) {
+  const prev = $('list').querySelector('.item.cur');
+  if (prev) prev.classList.remove('cur');
+  S.cur = i;
+  const it = S.view[i];
+  if (!it) { $('facts').replaceChildren(); $('kind-note').textContent = 'Nothing matches the filters.'; video.removeAttribute('src'); S.win = null; draw(); return; }
+  const row = $('list').querySelector(`.item[data-i="${i}"]`);
+  if (row) { row.classList.add('cur'); row.scrollIntoView({block: 'nearest'}); }
+  renderFacts(it);
+  S.win = null; draw();
+  const src = `/video/${encodeURIComponent(it.clip)}.mp4`;
+  if (!video.src.endsWith(src)) { video.src = src; }
+  video.play().catch(() => {});
+  if (it.kind === 'used' || it.kind === 'filtered_out') {
+    try {
+      const res = await fetch('/api/window?id=' + encodeURIComponent(it.id));
+      if (!res.ok) throw new Error((await res.json()).error);
+      const w = await res.json();
+      if (S.view[S.cur] === it) { S.win = w; video.currentTime = w.start / w.fps; draw(); }
+    } catch (e) { toast('Could not load skeleton: ' + e.message); }
+  }
+}
+
+function renderFacts(it) {
+  const f = $('facts'); f.replaceChildren();
+  const add = (k, v, mono) => {
+    const dt = document.createElement('dt'); dt.textContent = k;
+    const dd = document.createElement('dd'); dd.textContent = v; if (mono) dd.className = 'mono';
+    f.append(dt, dd);
+  };
+  add('Window', it.id, true);
+  add('Clip', it.clip, true);
+  if (it.track !== null) add('Track number', String(it.track), true);
+  if (it.start !== null) add('Frames', `${it.start} – ${it.end} (${it.end - it.start + 1} frames)`, true);
+  add('Group', groupOf(it));
+  add('Label in annotations.csv', it.label || '(none)');
+  if (it.excluded) add('Excluded', 'yes, listed in excluded_windows.csv (apply skips it)');
+  add('Original judgements', S.prov[it.id] || '(none recorded)');
+  if (it.sus) {
+    const other = it.label === 'Focused' ? 'Distracted' : 'Focused';
+    const pm = it.sus.p_other === null ? 'no prediction' : `${Math.round(it.sus.p_other * 100)}% ${other} (mean of ${it.sus.n_runs} runs)`;
+    add('Suspicion', `rank ${it.sus.rank.toLocaleString()} of ${it.sus.of.toLocaleString()} ${it.label} · models say ${pm} · keypoint confidence ${it.sus.conf.toFixed(2)} (joints 0–12)`);
+  }
+  const others = Object.entries(S.reviews).filter(([, r]) => r[it.id] !== undefined).map(([n, r]) => `${n}: ${r[it.id]}`);
+  add('Reviews', others.length ? others.join(' · ') : '(none yet)');
+  $('kind-note').textContent = KIND_NOTE[it.kind === 'used' && !it.label ? 'unlabeled' : it.kind];
+  const m = mine(it);
+  const orig = it.label || 'Unlabeled';
+  const nl = $('now-label');
+  if (!labelable(it)) nl.innerHTML = `Label: <span class="${pillClass(orig)}">${orig}</span> <small>(cannot be changed: no window)</small>`;
+  else if (changed(it)) nl.innerHTML = `Label: <span class="${pillClass(orig)} old">${orig}</span> → <span class="${pillClass(m)}">${m}</span> <small>saved as ${reviewer()}'s review; annotations.csv changes on apply</small>`;
+  else if (m !== undefined) nl.innerHTML = `Label: <span class="${pillClass(orig)}">${orig}</span> <small>checked by ${reviewer()}, kept</small>`;
+  else nl.innerHTML = `Label: <span class="${pillClass(orig)}">${orig}</span> <small>click a label below to switch</small>`;
+  document.querySelectorAll('#keys button[data-label]').forEach(b => {
+    const l = b.dataset.label;
+    b.className = (l === it.label ? 'cur-label ' : '') + (l === m ? 'my-' + l : '');
+    b.disabled = !labelable(it);
+  });
+  $('b-prev').disabled = S.cur <= 0;
+  $('b-next').disabled = S.cur >= S.view.length - 1;
+}
+
+async function decide(label) {
+  const it = S.view[S.cur];
+  if (!it || !labelable(it)) return;
+  const name = reviewer();
+  if (!REVIEWER_RE.test(name)) {
+    $('reviewer').classList.add('bad'); $('reviewer').focus();
+    toast('Enter a reviewer name first (letters, digits, _ or -)');
+    return;
+  }
+  const res = await fetch('/api/review', {method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({reviewer: name, window_id: it.id, label})});
+  if (!res.ok) { toast('Not saved: ' + ((await res.json()).error || res.status)); return; }
+  (S.reviews[name] = S.reviews[name] || {})[it.id] = label;
+  const auto = $('auto-next').checked;
+  const nextId = (S.view[S.cur + 1] || {}).id;
+  toast(label === it.label ? `${it.clip} #${it.track}: kept ${label}` : `${it.clip} #${it.track}: ${it.label || 'Unlabeled'} → ${label}`);
+  if ($('only-todo').checked || $('only-diff').checked) { applyFilter(auto ? nextId : it.id); return; }
+  refreshRow(S.cur); updateProgress();
+  if (auto && S.cur < S.view.length - 1) select(S.cur + 1); else renderFacts(it);
+}
+
+function fit() {
+  const r = canvas.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  if (canvas.width !== Math.round(r.width * dpr)) { canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr); }
+  const vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
+  const s = Math.min(canvas.width / vw, canvas.height / vh);
+  return {s, ox: (canvas.width - vw * s) / 2, oy: (canvas.height - vh * s) / 2, dpr};
+}
+
+function frameIndex(t) {
+  const w = S.win; if (!w) return -1;
+  return Math.round(t * w.fps) - w.start;
+}
+
+function draw(mediaTime) {
+  const {s, ox, oy, dpr} = fit();
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const it = S.view[S.cur];
+  const w = S.win;
+  if (!w) { $('frame-msg').textContent = it ? (labelable(it) ? 'loading skeleton' : 'video only') : ''; return; }
+  const t = mediaTime !== undefined ? mediaTime : video.currentTime;
+  const T = w.kps.length;
+  let k = frameIndex(t);
+  if (k > T - 1 && !video.paused) { video.currentTime = w.start / w.fps; k = 0; }
+  k = Math.max(0, Math.min(T - 1, k));
+  $('frame-msg').textContent = `frame ${w.start + k} of ${w.start}–${w.end} · ${w.fps} fps`;
+  const X = x => ox + x * s, Y = y => oy + y * s;
+  if ($('t-box').checked) {
+    const [cx, cy, bw, bh] = w.boxes[k];
+    ctx.strokeStyle = '#ffa500'; ctx.lineWidth = 2 * dpr;
+    ctx.strokeRect(X(cx - bw / 2), Y(cy - bh / 2), bw * s, bh * s);
+  }
+  if ($('t-skel').checked) {
+    const p = w.kps[k];
+    ctx.lineWidth = 2.5 * dpr;
+    for (const [a, b] of EDGES) {
+      if (p[a][2] < 0.3 || p[b][2] < 0.3) continue;
+      ctx.strokeStyle = (a > 12 || b > 12) ? 'rgba(154,163,173,.8)' : 'rgba(59,224,138,.9)';
+      ctx.beginPath(); ctx.moveTo(X(p[a][0]), Y(p[a][1])); ctx.lineTo(X(p[b][0]), Y(p[b][1])); ctx.stroke();
+    }
+    p.forEach(([x, y, c], j) => {
+      if (c < 0.3) return;
+      ctx.fillStyle = j > 12 ? '#9aa3ad' : '#3be08a';
+      ctx.beginPath(); ctx.arc(X(x), Y(y), 3.5 * dpr, 0, Math.PI * 2); ctx.fill();
+    });
+  }
+}
+
+if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
+  const tick = (now, meta) => { draw(meta.mediaTime); video.requestVideoFrameCallback(tick); };
+  video.requestVideoFrameCallback(tick);
+} else {
+  const loop = () => { draw(); requestAnimationFrame(loop); };
+  requestAnimationFrame(loop);
+}
+video.loop = true;
+video.addEventListener('seeked', () => draw());
+video.addEventListener('loadedmetadata', () => draw());
+window.addEventListener('resize', () => draw());
+['t-skel', 't-box'].forEach(id => $(id).addEventListener('change', () => draw()));
+
+function togglePlay() { video.paused ? video.play().catch(() => {}) : video.pause(); }
+video.addEventListener('play', () => { $('b-play').firstChild.textContent = 'Pause '; });
+video.addEventListener('pause', () => { $('b-play').firstChild.textContent = 'Play '; });
+function stepFrame(d) {
+  const fps = S.win ? S.win.fps : 25;
+  video.pause();
+  video.currentTime = Math.max(0, (Math.round(video.currentTime * fps) + d) / fps + 0.001);
+}
+$('b-play').onclick = togglePlay;
+$('b-prevf').onclick = () => stepFrame(-1);
+$('b-nextf').onclick = () => stepFrame(1);
+document.querySelectorAll('[data-rate]').forEach(b => b.onclick = () => { video.playbackRate = +b.dataset.rate; });
+document.querySelectorAll('#keys button[data-label]').forEach(b => b.onclick = () => decide(b.dataset.label));
+$('b-prev').onclick = () => select(S.cur - 1);
+$('b-next').onclick = () => select(S.cur + 1);
+
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' && e.target.type === 'text') { if (e.key === 'Enter' || e.key === 'Escape') e.target.blur(); return; }
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+  const act = {'1': () => decide('Focused'), '2': () => decide('Distracted'), '8': () => decide('TRASH'), 'd': () => decide('Skip'),
+    'arrowright': () => S.cur < S.view.length - 1 && select(S.cur + 1), 'arrowleft': () => S.cur > 0 && select(S.cur - 1),
+    ' ': togglePlay, ',': () => stepFrame(-1), '.': () => stepFrame(1),
+    's': () => { $('t-skel').checked = !$('t-skel').checked; draw(); }, 'b': () => { $('t-box').checked = !$('t-box').checked; draw(); }}[k];
+  if (act) { e.preventDefault(); act(); }
+});
+
+$('reviewer').value = load('review.reviewer') || 'panel';
+$('auto-next').checked = load('review.autonext') === '1';
+$('auto-next').addEventListener('change', () => store('review.autonext', $('auto-next').checked ? '1' : '0'));
+$('reviewer').addEventListener('input', () => {
+  $('reviewer').classList.remove('bad');
+  store('review.reviewer', $('reviewer').value.trim());
+  applyFilter();
+});
+$('search').addEventListener('input', () => applyFilter());
+['only-todo', 'only-diff', 'order'].forEach(id => $(id).addEventListener('change', () => applyFilter()));
+
+(async () => {
+  const res = await fetch('/api/index');
+  const data = await res.json();
+  S.items = data.items; S.prov = data.provenance; S.reviews = data.reviews;
+  S.bySus = [...S.items.filter(it => it.sus).sort((a, b) => b.sus.score - a.sus.score), ...S.items.filter(it => !it.sus)];
+  renderChips();
+  S.cur = 0;
+  applyFilter(S.items[0] && S.items[0].id);
+})();
+</script>
+</body>
+</html>
